@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual Environment
+venv/
+.venv/
+backend/venv312/
+
+# Node
+node_modules/
+frontend/node_modules/
+
+# Database
+*.db
+
+# Packages
+*.whl
+*.tar.gz
+
+# Environment
+.env

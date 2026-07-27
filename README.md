@@ -1,5 +1,5 @@
 
-
+#  AI Powered Chatbot
 A complete AI SaaS-style chat web app: React (Vite + Tailwind) frontend, FastAPI backend, JWT auth, SQLite database, and local LLM chat via **Ollama**.
 
 ## What's actually implemented

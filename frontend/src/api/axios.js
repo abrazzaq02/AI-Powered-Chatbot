@@ -1,7 +1,11 @@
 import axios from 'axios'
 
+// Relative by default so the app works behind any host/proxy (dev server proxy,
+// nginx, preview URLs). Override with VITE_API_URL for a separate API origin.
+export const API_BASE = import.meta.env.VITE_API_URL || '/api'
+
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api',
+  baseURL: API_BASE,
 })
 
 api.interceptors.request.use((config) => {

@@ -19,6 +19,12 @@ load_dotenv()
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
 
+# Optional OpenAI-compatible provider (OpenAI, Groq, Together, OpenRouter,
+# LM Studio, vLLM...). When OPENAI_API_KEY is set it takes priority over Ollama.
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
 router = APIRouter(prefix="/api/chats", tags=["chat"])
 
 
@@ -88,12 +94,16 @@ def _get_owned_chat(db: Session, chat_id: int, user: models.User) -> models.Chat
 
 # ---------- Messaging / AI ----------
 FALLBACK_NOTICE = (
-    "⚠️ I can't reach the local Ollama server right now, so here's a demo reply.\n\n"
-    "To get real AI responses:\n"
+    "⚠️ No AI backend is reachable right now, so here's a demo reply. "
+    "Everything else (accounts, chats, history, uploads) is working normally.\n\n"
+    "**Option A — run a model locally with Ollama:**\n"
     "1. Install Ollama from https://ollama.com\n"
     "2. Run `ollama pull llama3.2`\n"
     "3. Make sure `ollama serve` is running\n\n"
-    "Once that's up, just send another message here."
+    "**Option B — use a hosted OpenAI-compatible API:**\n"
+    "Set `OPENAI_API_KEY` (and optionally `OPENAI_BASE_URL` / `OPENAI_MODEL`) "
+    "in `backend/.env`, then restart the backend.\n\n"
+    "Once either is set up, just send another message here."
 )
 
 
@@ -112,6 +122,37 @@ def build_context(chat: models.ChatSession) -> list:
             "content": "The user has uploaded document(s). Use this content to answer questions when relevant:" + doc_context
         })
     return history
+
+
+def stream_openai(messages: list, model: str):
+    """Yields text chunks from any OpenAI-compatible /chat/completions endpoint."""
+    resp = requests.post(
+        f"{OPENAI_BASE_URL}/chat/completions",
+        headers={
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json={"model": model, "messages": messages, "stream": True},
+        stream=True,
+        timeout=60,
+    )
+    resp.raise_for_status()
+    for raw in resp.iter_lines():
+        if not raw:
+            continue
+        line = raw.decode("utf-8") if isinstance(raw, bytes) else raw
+        if not line.startswith("data: "):
+            continue
+        data = line[6:].strip()
+        if data == "[DONE]":
+            break
+        try:
+            delta = json.loads(data)["choices"][0].get("delta", {})
+        except (ValueError, KeyError, IndexError):
+            continue
+        chunk = delta.get("content") or ""
+        if chunk:
+            yield chunk
 
 
 def stream_ollama(messages: list, model: str):
@@ -142,6 +183,30 @@ def stream_ollama(messages: list, model: str):
         yield FALLBACK_NOTICE
 
 
+def generate_reply(messages: list, model: str):
+    """Pick the configured provider, and degrade gracefully to a helpful
+    demo message if none is reachable (so the UI is always testable)."""
+    if OPENAI_API_KEY:
+        try:
+            produced = False
+            for chunk in stream_openai(messages, OPENAI_MODEL):
+                produced = True
+                yield chunk
+            if produced:
+                return
+        except Exception:
+            pass  # fall through to Ollama / demo reply
+
+    produced = False
+    for chunk in stream_ollama(messages, model):
+        if chunk == FALLBACK_NOTICE:
+            break
+        produced = True
+        yield chunk
+    if not produced:
+        yield FALLBACK_NOTICE
+
+
 @router.post("/send")
 def send_message(payload: schemas.SendMessageRequest, db: Session = Depends(get_db),
                   user: models.User = Depends(get_current_user)):
@@ -169,7 +234,7 @@ def send_message(payload: schemas.SendMessageRequest, db: Session = Depends(get_
     def event_stream():
         full_reply = ""
         yield f"data: {json.dumps({'type': 'meta', 'chat_id': chat_id})}\n\n"
-        for chunk in stream_ollama(context, model):
+        for chunk in generate_reply(context, model):
             full_reply += chunk
             yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
 
@@ -188,4 +253,13 @@ def send_message(payload: schemas.SendMessageRequest, db: Session = Depends(get_
 
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            # disable proxy buffering (nginx / vite proxy) so chunks arrive live
+            "X-Accel-Buffering": "no",
+        },
+    )

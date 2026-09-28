@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { FiSend, FiSquare } from 'react-icons/fi'
-import api from '../api/axios'
+import api, { API_BASE } from '../api/axios'
 import Sidebar from '../components/Sidebar'
 import Navbar from '../components/Navbar'
 import Message from '../components/Message'
@@ -78,7 +78,7 @@ export default function Chat() {
       const controller = new AbortController()
       abortRef.current = controller
 
-      const response = await fetch('http://localhost:8000/api/chats/send', {
+      const response = await fetch(`${API_BASE}/chats/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ chat_id: activeChatId, content: text }),

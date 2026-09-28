@@ -97,11 +97,3 @@ neurochat-ai/
     └── package.json
 ```
 
-## Next steps to make it production-ready
-
-- Swap SQLite → PostgreSQL (`DATABASE_URL` in `.env`; models already use SQLAlchemy so this is a one-line change plus running `alembic` migrations if you want versioned migrations)
-- Add a real transactional email provider for password reset
-- Add rate limiting on `/api/auth/*` endpoints
-- Move file uploads to S3/GCS instead of local disk for multi-instance deployments
-- Add HTTPS + a proper reverse proxy (nginx/Caddy) in front of both services
-- Containerize with Docker Compose (one service each for backend, frontend, and optionally Ollama)

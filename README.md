@@ -50,6 +50,18 @@ App at `http://localhost:5173`. The Vite dev server proxies `/api` → `http://1
 
 </details>
 
+## Portfolio site
+
+The frontend also ships a complete, dreamy **pink-aesthetic animated portfolio** (the fictional persona *Ayesha Noor*) at `/`:
+
+```bash
+cd frontend && npm run dev   # → http://localhost:5173/
+```
+
+Highlights: full-screen animated hero with typewriter roles and a mouse-parallax waving teddy bear, glassmorphism About / Skills / Projects / Timeline / Services sections, a working validated contact form (persists messages to localStorage, with honeypot spam trap), custom pink cursor with heart particles, floating hearts/petals/sparkles background, scroll-spy navbar, interactive project case-study modals, and full `prefers-reduced-motion` support.
+
+The NeuroChat AI landing page now lives at `/welcome` — the chatbot, auth, dashboard, chat, settings and API routes are all unchanged.
+
 ### Docker
 
 ```bash
